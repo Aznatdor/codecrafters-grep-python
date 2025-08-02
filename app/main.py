@@ -15,6 +15,9 @@ def match_pattern(input_line, pattern):
         return any(char.isdigit() for char in input_line)
     elif pattern == r"\w":
         return any(char in ALPHANUMERIC for char in input_line)
+    elif pattern[0] == "[":
+        char_group = pattern[1:-1]
+        return any(char in char_group for char in input_line)
     else:
         raise RuntimeError(f"Unhandled pattern: {pattern}")
 
