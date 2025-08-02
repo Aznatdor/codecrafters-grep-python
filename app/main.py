@@ -3,10 +3,18 @@ import sys
 # import pyparsing - available if you need it!
 # import lark - available if you need it!
 
+def match_digit(input_line, pattern):
+    if r"\d" ==  pattern:
+        return any(map(lambda x: x.isnumeric(), input_line))
 
 def match_pattern(input_line, pattern):
     if len(pattern) == 1:
         return pattern in input_line
+    if len(pattern) == 2:
+        res = match_digit(input_line, pattern)
+        if res:
+            print("Matched!", file=sys.stderr)
+        return res
     else:
         raise RuntimeError(f"Unhandled pattern: {pattern}")
 
