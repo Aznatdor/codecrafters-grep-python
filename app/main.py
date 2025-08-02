@@ -1,13 +1,20 @@
 import sys
+import string
 
 # import pyparsing - available if you need it!
 # import lark - available if you need it!
+
+
+ALPHANUMERIC = set(string.ascii_letters + string.digits + "_")
+
 
 def match_pattern(input_line, pattern):
     if len(pattern) == 1:
         return pattern in input_line
     elif pattern == r"\d":
         return any(char.isdigit() for char in input_line)
+    elif pattern == r"\w":
+        return any(char in ALPHANUMERIC for char in input_line)
     else:
         raise RuntimeError(f"Unhandled pattern: {pattern}")
 
