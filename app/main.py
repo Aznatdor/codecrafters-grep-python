@@ -101,8 +101,12 @@ def main():
         exit(1)
 
 
-    pattern_len = len(pattern) - pattern.count("\\")
     input_len = len(input_line)
+
+    if pattern[0] == "^":
+        if parse(pattern[1:], input_line):
+            exit(0)
+        exit(1)
 
 
     for start_pos in range(input_len):
