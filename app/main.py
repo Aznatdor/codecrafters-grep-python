@@ -108,6 +108,12 @@ def main():
             exit(0)
         exit(1)
 
+    if pattern[-1] ==  "$":
+        pattern_len = len(pattern) - 1
+        if parse(pattern[:-1], input_line[-pattern_len:]):
+            exit(0)
+        exit(1)
+
 
     for start_pos in range(input_len):
         if parse(pattern, input_line, input_ind=start_pos):
