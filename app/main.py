@@ -123,8 +123,10 @@ def match_recursive(pattern, input_line, p_ind=0, l_ind=0):
     next_pattern = pattern[p_ind + 1] if p_ind < len(pattern) - 1 else None
 
     curr_char = input_line[l_ind]
-
-    if curr_pattern.pattern_type == CHAR:
+    
+    if curr_pattern.pattern == ".":
+        matched |= match_recursive(pattern, input_line, p_ind+1, l_ind+1)
+    elif curr_pattern.pattern_type == CHAR:
         if curr_pattern.pattern == curr_char:
             matched |=  match_recursive(pattern, input_line, p_ind+1, l_ind+1)
     elif curr_pattern.pattern_type == METACHAR:
