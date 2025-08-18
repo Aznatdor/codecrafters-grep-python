@@ -9,7 +9,6 @@ GROUP = 3
 ANCHOR = 4
 OPTION = 5
 
-
 class RE_Pattern:
     def __init__(self, pattern_type, pattern, pattern_list=[], negation=False):
         self.pattern_type = pattern_type
@@ -42,11 +41,8 @@ def parse(pattern, ind=0):
 
             # some metachar
             return RE_Pattern(METACHAR, "\\" + pattern[curr_ind]), curr_ind + 1
-        # Parse simple char
         elif pattern[curr_ind] in ["+", "*", "?"]:
             return RE_Pattern(OPTION, pattern[curr_ind]), curr_ind + 1
-        elif pattern[curr_ind].isalpha():
-            return RE_Pattern(CHAR, pattern[curr_ind]), curr_ind + 1
         # Parse group
         elif pattern[curr_ind] == "[":
             group = []
@@ -67,6 +63,8 @@ def parse(pattern, ind=0):
             return RE_Pattern(ANCHOR, "^"), curr_ind + 1
         elif pattern[curr_ind] == "$":
             return RE_Pattern(ANCHOR, "$"), curr_ind + 1
+        else: # Parse simple char
+            return RE_Pattern(CHAR, pattern[curr_ind]), curr_ind + 1
 
 
 def parse_all(pattern):
@@ -91,7 +89,7 @@ def parse_all(pattern):
 
 
 if __name__ == "__main__":
-    pattern =r"a+\w?^c\\[^abc\d]*$" 
+    pattern = r"\d[0\w]\^dg]"
     res = parse_all(pattern)
     print(pattern)
     print(res)
