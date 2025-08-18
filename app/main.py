@@ -1,98 +1,166 @@
 import sys
 import string
-import string
-
 # import pyparsing - available if you need it!
 # import lark - available if you need it!
 
+# ======================== preprocessing functions ==========================================
 
-ALPHANUMERIC = set("_" + string.ascii_letters + string.digits)
+# Preprocessing step for grep
+# Parses input string into sequence of special characters without verifying if the sequence makes sense and etc
+
+CHAR = 1
+METACHAR = 2
+GROUP = 3
+ANCHOR = 4
+OPTION = 5
+
+class RE_Pattern:
+    def __init__(self, pattern_type, pattern, pattern_list=[], negation=False):
+        self.pattern_type = pattern_type
+        self.pattern = pattern
+        self.pattern_list = pattern_list
+        self.negation = negation
+
+    def __str__(self):
+        return f"\nType: {self.pattern_type}\nPattern: {self.pattern}\nList: {self.pattern_list}\nNegation: {self.negation}"
+
+    def __repr__(self):
+        return f"\nType: {self.pattern_type}\nPattern: {self.pattern}\nList: {self.pattern_list}\nNegation: {self.negation}"
 
 
-def parse(pattern, input_string, pattern_ind=0, input_ind=0):
-    # print(pattern, input_string, pattern_ind, input_ind)
-    # print("PATTERN LEN", len(pattern))
-    if pattern_ind >= len(pattern):
-        # print("HERE")
-        return True
-    if input_ind >= len(input_string): return False
+def parse(pattern, ind=0):
+    # Parse one RE character
+    # For convinience also returns the index where the next pattern should begin
+    curr_ind = ind
+    times = 0
 
-    if pattern[pattern_ind] == "\\": # metacharacter
-        # print("METACHAR")
-        pattern_ind += 1
+    while True:
+        # Parse metachar
+        if pattern[curr_ind] == "\\":
+            if curr_ind < len(pattern) - 1: curr_ind += 1
+            else: return None, None
+            
+            # Might be just a simple "\" character
+            if pattern[curr_ind] == "\\":
+                return RE_Pattern(CHAR, "\\"), curr_ind + 1
 
-        if pattern[pattern_ind] == "d": # match with one digit
-            if input_string[input_ind].isnumeric():
-                return parse(pattern, input_string, pattern_ind+1, input_ind+1)
-            return False
+            # some metachar
+            return RE_Pattern(METACHAR, "\\" + pattern[curr_ind]), curr_ind + 1
+        elif pattern[curr_ind] in ["+", "*", "?"]:
+            return RE_Pattern(OPTION, pattern[curr_ind]), curr_ind + 1
+        # Parse group
+        elif pattern[curr_ind] == "[":
+            group = []
+            if curr_ind < len(pattern) - 1: curr_ind += 1
+            else: return None, None
+            
+            negation = pattern[curr_ind] == "^"
+            if negation: curr_ind += 1
 
-        elif pattern[pattern_ind] == "w": # match with one alphanumeric character
-            if input_string[input_ind] in ALPHANUMERIC:
-                return parse(pattern, input_string, pattern_ind+1, input_ind+1)
-            return False
-        elif pattern[pattern_ind] == "\\":
-            if pattern[pattern_ind] == input_string[input_ind]:
-                return parse(pattern, input_string, pattern_ind+1, input_ind+1)
-            return False
+            # get the subpattern within the group and parse it into the list
+            pattern_end = pattern.find("]", curr_ind)
+            subpattern = pattern[curr_ind : pattern_end]
+
+            group = parse_all(subpattern)
+            return RE_Pattern(GROUP, None, group, negation=negation), pattern_end + 1
+
+        elif pattern[curr_ind] == "^":
+            return RE_Pattern(ANCHOR, "^"), curr_ind + 1
+        elif pattern[curr_ind] == "$":
+            return RE_Pattern(ANCHOR, "$"), curr_ind + 1
+        else: # Parse simple char
+            return RE_Pattern(CHAR, pattern[curr_ind]), curr_ind + 1
+
+
+def parse_all(pattern):
+    """
+        Splits pattern into individual regex patterns
+
+        Args:
+            pattern: str
+
+        Returns:
+            pattern_list: List[RE_Pattern]
+    """
+
+    curr_ind = 0
+    pattern_list = []
+    while curr_ind != len(pattern): 
+        re, next_ind = parse(pattern, curr_ind) 
+        curr_ind = next_ind
+        pattern_list.append(re)
+
+    return pattern_list
+
+
+# =================================== main matching function ==========================
+
+ALPHANUMERIC = set(string.ascii_letters + string.digits + "_")
+
+def match_recursive(pattern, input_line, p_ind=0, l_ind=0):
+    """
+        Recursively matches pattern with the given input string.
+        args:
+            pattern: List[RE_Pattern] - list of singular regular expression patterns
+            input_line: str - string to be matched with pattern
+            p_ind: int - current position in pattern array
+            l_ind: int - current position in input string
+
+        returns:
+            matched: bool - True is input string matches given pattern
+    """
+    # Base cases
+    if p_ind >= len(pattern): return True
+    if l_ind >= len(input_line): return False
+
+    matched = False # we can't just return since we also should consider options
+
+    curr_pattern = pattern[p_ind]
+    # continue
+    if curr_pattern.pattern_type == OPTION:
+        return match_recursive(pattern, input_line, p_ind+1, l_ind)
+
+    next_pattern = pattern[p_ind + 1] if p_ind < len(pattern) - 1 else None
+
+    curr_char = input_line[l_ind]
+
+    if curr_pattern.pattern_type == CHAR:
+        if curr_pattern.pattern == curr_char:
+            matched |=  match_recursive(pattern, input_line, p_ind+1, l_ind+1)
+    elif curr_pattern.pattern_type == METACHAR:
+        if curr_pattern.pattern == r"\w":
+            if curr_char in ALPHANUMERIC:
+                matched |=  match_recursive(pattern, input_line, p_ind+1, l_ind+1)
+        elif curr_pattern.pattern == r"\d":
+            if curr_char.isnumeric():
+                matched |=  match_recursive(pattern, input_line, p_ind+1, l_ind+1)
         else:
-            raise Exception(f"Unknown metacharacter \\{pattern[pattern_ind]}")
+            raise(Exception(f"Unknown metacharacter {curr_pattern.pattern}"))
+    elif curr_pattern.pattern_type == GROUP:
+        is_match = False
 
-    elif pattern[pattern_ind] == "[": # match a group
-        # TO DO: invoke parse function after reacing "]". Otherwise it returns None
-        # print("GROUP")
-        END = pattern.find("]", pattern_ind)
-        if len(pattern) >= 2 and pattern[pattern_ind+1] == "^":
-            FLAG = True
-            pattern_ind += 2
+        for subpattern in curr_pattern.pattern_list:
+            is_match |= match_recursive([subpattern], curr_char)
 
-            while pattern_ind != END:
-                # create a subpattern
-                if pattern[pattern_ind] == "\\":
-                    subpattern = f"\\{pattern[pattern_ind+1]}"
-                    pattern_ind += 1
-                else:
-                    subpattern = pattern[pattern_ind]
+        # if negation, then negation ^ is_match = not is_match
+        # if true, continue, else return False
+        if curr_pattern.negation ^ is_match: 
+            matched |=  match_recursive(pattern, input_line, p_ind+1, l_ind+1)
 
-                # try to match the current subpattern with the current character in the input
-                # if at least one match, we should return False
-                if parse(subpattern, input_string[input_ind]):
-                    FLAG = False
-                    break
+    if next_pattern and next_pattern.pattern_type == OPTION:
+        # up to this point we have tried to match one time (and probably have failed)
+        # thus we can try to match depending on option provided
+        if next_pattern.pattern == "+":
+            matched |=  match_recursive(pattern, input_line, p_ind, l_ind+1) # matches multiple times
+        elif next_pattern.pattern == "?":
+            matched |=  match_recursive(pattern, input_line, p_ind+2, l_ind) # skip current pattern
 
-                pattern_ind += 1 # advance
-
-            if FLAG:
-                return parse(pattern, input_string, END+1, input_ind+1)
-            return False
-
-        else:
-            pattern_ind += 1
-            FLAG = False
-
-            while pattern_ind != END:
-                if pattern[pattern_ind] == "\\":
-                    subpattern = f"\\{pattern[pattern_ind+1]}"
-                    pattern_ind += 1
-                else:
-                    subpattern = pattern[pattern_ind]
-                if parse(subpattern, input_string[input_ind]):
-                    FLAG = True
-                    break
-
-                pattern_ind += 1 # advance
-            if FLAG:
-                return parse(pattern, input_string, END+1, input_ind+1)
-            return False
-
-    else: # match one character
-        # print("CHAR")
-        if pattern[pattern_ind] == input_string[input_ind]:
-            return parse(pattern, input_string, pattern_ind+1, input_ind+1)
-        return False
+    return matched
 
 
 def main():
     pattern = sys.argv[2]
+    pattern_list = parse_all(pattern)
     input_line = sys.stdin.read()
 
 
@@ -100,23 +168,22 @@ def main():
         print("Expected first argument to be '-E'")
         exit(1)
 
-
     input_len = len(input_line)
 
-    if pattern[0] == "^":
-        if parse(pattern[1:], input_line):
+    if pattern_list[0].pattern == "^":
+        if match_recursive(pattern_list[1:], input_line):
             exit(0)
         exit(1)
 
-    if pattern[-1] ==  "$":
-        pattern_len = len(pattern) - 1
-        if parse(pattern[:-1], input_line[-pattern_len:]):
+    if pattern_list[-1].pattern ==  "$":
+        pattern_len = len(pattern_list) - 1
+        if match_recursive(pattern_list[:-1], input_line[-pattern_len:]):
             exit(0)
         exit(1)
 
 
     for start_pos in range(input_len):
-        if parse(pattern, input_line, input_ind=start_pos):
+        if match_recursive(pattern_list, input_line, l_ind=start_pos):
             # print(True)
             exit(0)
 
