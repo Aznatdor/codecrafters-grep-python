@@ -93,8 +93,9 @@ def split_group(pattern):
 
 
 if __name__ == "__main__":
-    pattern = "((abc|bca)|a|b|((a|b)|(b|c)))"
+    #pattern = "((abc|bca)|a|b|((a|b)|(b|c)))"
     #pattern = "(abc)"
+    pattern = "((abc)(abc))"
     print(pattern)
     res = split_group(pattern)
     print(res)
