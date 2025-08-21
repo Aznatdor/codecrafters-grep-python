@@ -34,6 +34,7 @@ def parse_group(pattern):
 
     return stack[0]
 
+
 def find_end(pattern, start=0):
     """
         args:
@@ -53,11 +54,47 @@ def find_end(pattern, start=0):
     raise(ValueError("Unmatched parentheses"))
 
 
+def split_group(pattern):
+    """
+        args:
+            pattern: str - group-string
+
+        returns:
+            group: list - list of subpatterns within the main pattern
+    """
+
+    depth = 0
+    group = []
+    curr = ""
+
+    for c in pattern:
+        if c == "(":
+            depth += 1
+            if depth > 1:
+                curr += "("
+        elif c == ")":
+            depth -= 1
+            if depth > 0:
+                curr += ")"
+        elif c == "|":
+            if depth == 1:
+                group.append(curr)
+                curr = ""
+            else:
+                curr += "|"
+        else:
+            curr += c
+
+    if curr: group.append(curr)
+
+    if depth > 0: raise(ValueError("Unmatched parentheses"))
+
+    return group
+
+
 if __name__ == "__main__":
-    pattern = "((abc|bca)|a|b|((a|b)|(b|c)))(abc|(a|b))()"
+    pattern = "((abc|bca)|a|b|((a|b)|(b|c)))"
     #pattern = "(abc)"
     print(pattern)
-    print(find_end(pattern, 29))
-    res = parse_group(pattern)
-    for group in res:
-        print(group)
+    res = split_group(pattern)
+    print(res)
