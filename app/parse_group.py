@@ -1,4 +1,4 @@
-# Algortihm for parsing groups
+# Algorithm for parsing groups
 
 def parse_group(pattern):
     """
@@ -34,12 +34,30 @@ def parse_group(pattern):
 
     return stack[0]
 
+def find_end(pattern, start=0):
+    """
+        args:
+            pattern: str - group-string starting with )
+
+        returns:
+            end: int - index for matching closing )
+    """
+    pattern = pattern[start:]
+
+    depth = 0
+    for i, c in enumerate(pattern):
+        if c == "(": depth += 1
+        if c == ")": depth -= 1
+        if depth == 0: return i + start
+
+    raise(ValueError("Unmatched parentheses"))
 
 
 if __name__ == "__main__":
-    #pattern = "((abc|bca)|a|b|((a|b)|(b|c)))(abc|(a|b))()"
-    pattern = "(abc)"
+    pattern = "((abc|bca)|a|b|((a|b)|(b|c)))(abc|(a|b))()"
+    #pattern = "(abc)"
     print(pattern)
+    print(find_end(pattern, 29))
     res = parse_group(pattern)
     for group in res:
         print(group)
