@@ -29,6 +29,13 @@ class RE_Pattern:
     def __repr__(self):
         return f" Type: {self.pattern_type} Pattern: {self.pattern} List:\n{self.pattern_list} Negation: {self.negation}"
 
+    def __eq__(self, t):
+        return (self.pattern_type == t.pattern_type and
+                self.pattern == t.pattern and
+                self.pattern_list == t.pattern_list and
+                self.negation == t.negation)
+
+
 # ========================== parsing functions =================================================
 
 def find_end(pattern, start=0):
@@ -362,4 +369,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print(parse_all("((abc)(def))") == parse_all("((abc)|(def))"))
     main()
