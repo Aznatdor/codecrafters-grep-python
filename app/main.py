@@ -193,64 +193,61 @@ class Matcher:
                 matched: bool - True is input string matches given pattern
                 l_ind: int - index where we have finished matching or -1  otherwise
         """
-        if cnt[0] == 100: raise(RuntimeError("Infinity"))
+        if cnt[0] == 1000: raise(RuntimeError("Infinity"))
         cnt[0] += 1
-        print(cnt[0])
-
-        # Base cases
-        if p_ind >= len(self.pattern): 
-            print("TRUE", l_ind)
-            return (True, l_ind)
-        if l_ind >= len(self.input_line): 
-            return (False, -1)
 
         matched = False # we can't just return since we also should consider options
         return_ind = -1
+        next_pattern = self.pattern[p_ind + 1] if p_ind < len(self.pattern) - 1 else None
+
+
+        # we should be able to skip current pattern in the end of the string
+        if next_pattern and  next_pattern.pattern == "?":
+            res, ind = self.match_recursive(p_ind+2, l_ind) # skip current pattern
+            if res:
+                matched = True
+                return_ind = ind
+
+        # Base cases
+        if p_ind >= len(self.pattern): 
+            return (True, l_ind)
+        if l_ind >= len(self.input_line):
+            if matched:
+                return (True, min(len(self.input_line) - 1, l_ind))
+            return (False, -1)
 
         curr_pattern = self.pattern[p_ind]
+
         # continue
         if curr_pattern.pattern_type == OPTION:
-            return  self.match_recursive(p_ind+1, l_ind) # we should just continue, thus return what the next iteration returns
-
-        next_pattern = self.pattern[p_ind + 1] if p_ind < len(self.pattern) - 1 else None
+            return self.match_recursive(p_ind+1, l_ind) # we should just continue, thus return what the next iteration returns
 
         curr_char = self.input_line[l_ind]
         
         if curr_pattern.pattern == ".":
-            if curr_pattern.pattern == curr_char:
-                res, ind = self.match_recursive(p_ind+1, l_ind+1)
-                if res:
-                    matched = True
-                    return_ind = ind
+            res, ind = self.match_recursive(p_ind+1, l_ind+1)
+            if res:
+                matched = True
+                return_ind = max(return_ind, ind)
         elif curr_pattern.pattern_type == CHAR:
             if curr_pattern.pattern == curr_char:
                 res, ind = self.match_recursive(p_ind+1, l_ind+1)
                 if res:
                     matched = True
-                    return_ind = ind
+                    return_ind = max(return_ind, ind)
         elif curr_pattern.pattern_type == METACHAR:
             if curr_pattern.pattern == r"\w":
                 if curr_char in ALPHANUMERIC:
                     res, ind = self.match_recursive(p_ind+1, l_ind+1)
                     if res:
                         matched = True
-                        return_ind = ind
-            elif curr_pattern.pattern_type == METACHAR:
-                    res, ind = self.match_recursive(p_ind+1, l_ind+1)
-                    if res:
-                        matched = True
-                        return_ind = ind
+                        return_ind = max(return_ind, ind)
             elif curr_pattern.pattern == r"\d":
                 if curr_char.isnumeric():
                     res, ind = self.match_recursive(p_ind+1, l_ind+1)
                     if res:
                         matched = True
-                        return_ind = ind
-            elif curr_pattern.pattern == r"\d":
-                    res, ind = self.match_recursive(p_ind+1, l_ind+1)
-                    if res:
-                        matched = True
-                        return_ind = ind
+                        return_ind = max(return_ind, ind)
             else:
                 raise(Exception(f"Unknown metacharacter {curr_pattern.pattern}"))
         elif curr_pattern.pattern_type == GROUP:
@@ -266,66 +263,45 @@ class Matcher:
                 res, ind = self.match_recursive(p_ind+1, l_ind+1)
                 if res:
                     matched = True
-                    return_ind = ind
+                    return_ind = max(return_ind, ind)
 
         elif curr_pattern.pattern_type == ALTERNATION:
-            is_match = False
-
+            # somehow subpatterns are lists lol!
             for subpattern in curr_pattern.pattern_list:
-                # If we have something like (abc|bca)+, we should consider abc(abc|bca)+ and bca(abc|bca)+
-                # as well as just abc, bca and abcabc, abcbca... 
-                if next_pattern and next_pattern.pattern == "+":
-                    # first case is unwrap one iteration of ()+, i.e. ()()+ case
-
-                    # try to match current pattern at least once. To avoid infinite recurrsion
-                    test_matcher = Matcher(subpattern, self.input_line)
-                    _, new_ind = test_matcher.match_recursive(l_ind=l_ind)
-
-                    # I think here we can just return since we already are considering options
-                    if new_ind > l_ind: # if matched, continue. We might skip the next iteration or continue on recurring
-                        res, ind = self.match_recursive(p_ind=p_ind, l_ind=new_ind) # pattern[p_ind:] consists of the current pattern (which is (group)) and the rest of the pattern
-                        print("ALT", res, ind)
-                        if res: return (True, ind)
-
-                    # stop iterations
-                    res, ind = self.match_recursive(p_ind+2, l_ind) # we could create new Matcher, but I though since we 
-                                                                            # are just skip two positions in pattern, we might use self
-
-                    print("ALT SKIP", res, ind)
-                    
-                    if res:
-                        return (True, ind)
-
-                # if we have (ab|bc)? we should check ab, bc or just skip
-                else:
-                    #  check for both "simple" case and "?" cases
-                    simple_matcher = Matcher(subpattern + self.pattern[p_ind+2:], self.input_line)
-                    res, ind = simple_matcher.match_recursive(l_ind=l_ind)
-                    if res: return (True, ind)
-
-                    # skip if we have "?" case
-                    if next_pattern and next_pattern.pattern == "?":
-                        # skip_matcher = Matcher(self.pattern[p_ind+2:], self.input_line)
-                        res, ind =  self.match_recursive(p_ind+2, l_ind)
-
-                        if res: return (True, ind)
-
-            return (False, -1) # If we have found a match we have matched the whole string, so we can easily return True
+                test_matcher = Matcher(subpattern + self.pattern[p_ind+1:], self.input_line)
+                res, ind = test_matcher.match_recursive(l_ind=l_ind) # probably won't work if we have multiple matches, i.e. one pattern is subpattern of another in the same group
+                if res:
+                    matched = True
+                    return_ind = max(return_ind, ind)
 
         elif curr_pattern.pattern == "$":
             if self.input_line[l_ind] == "\0": 
                 return (True, l_ind-1) # we should not account the EOF character. Also can just return
             return (False, -1)
         
-        if curr_pattern.pattern_type != ALTERNATION and next_pattern and next_pattern.pattern_type == OPTION:
+        if next_pattern and next_pattern.pattern == "+":
             # up to this point we have tried to match one time (and probably have failed)
             # thus we can try to match depending on option provided
             if next_pattern.pattern == "+":
-                res, ind = self.match_recursive(p_ind, l_ind+1) # matches multiple times
-                if res: return (True, ind)
-            elif next_pattern.pattern == "?":
-                res, ind = self.match_recursive(p_ind+2, l_ind) # skip current pattern
-                if res: return (True, ind)
+                curr_l_ind = l_ind
+                matched_inds = []
+
+                # Try to match as much times as you can
+                while True:
+                    try_matcher = Matcher([curr_pattern], self.input_line)
+                    res, next_ind = try_matcher.match_recursive(l_ind=curr_l_ind)
+                    if res and next_ind > curr_l_ind:
+                        curr_l_ind = next_ind
+                        matched_inds.append(next_ind)
+                    else:
+                        break
+
+                # If we have matches continue from the furthest index
+                for pos in reversed(matched_inds):
+                    res, end_ind = self.match_recursive(p_ind+2, pos)
+                    if res:
+                        return (True, end_ind)
+                return (False, -1)
 
         return (matched, return_ind)
 
@@ -369,5 +345,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print(parse_all("((abc)(def))") == parse_all("((abc)|(def))"))
     main()
