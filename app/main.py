@@ -15,6 +15,7 @@ GROUP = 3
 ANCHOR = 4
 OPTION = 5
 ALTERNATION = 6
+BACKREFERRENCE = 7
 
 class RE_Pattern:
     def __init__(self, pattern_type, pattern, pattern_list=[], negation=False):
@@ -110,6 +111,12 @@ def parse(pattern, ind=0):
             # Might be just a simple "\" character
             if pattern[curr_ind] == "\\":
                 return RE_Pattern(CHAR, "\\"), curr_ind + 1
+            elif pattern[curr_ind].isnumeric():
+                num = ""
+                while curr_ind < len(pattern) and pattern[curr_ind].isnumeric():
+                    num += pattern[curr_ind]
+                    curr_ind += 1
+                return RE_Pattern(BACKREFERRENCE, int(num) - 1), curr_ind # since curr_ind is already in the beginning of the next pattern
 
             # some metachar
             return RE_Pattern(METACHAR, "\\" + pattern[curr_ind]), curr_ind + 1
@@ -179,6 +186,7 @@ class Matcher:
     def __init__(self, pattern, input_line):
         self.input_line = input_line
         self.pattern = pattern
+        self.backreferrence = []
 
 
     @functools.cache
@@ -265,14 +273,29 @@ class Matcher:
                     matched = True
                     return_ind = max(return_ind, ind)
 
-        elif curr_pattern.pattern_type == ALTERNATION:
+        elif curr_pattern.pattern_type == ALTERNATION or curr_pattern.pattern_type == BACKREFERRENCE:
+            # in case of backreferrence we have a group too, so the logic is pretty similar
+            if curr_pattern.pattern_type == ALTERNATION:
+                option_list = curr_pattern.pattern_list
+            else:
+                ref_ind = curr_pattern.pattern
+                referrence = self.backreferrence[ref_ind]
+                option_list = [referrence]
+
             # somehow subpatterns are lists lol!
-            for subpattern in curr_pattern.pattern_list:
-                test_matcher = Matcher(subpattern + self.pattern[p_ind+1:], self.input_line)
-                res, ind = test_matcher.match_recursive(l_ind=l_ind) # probably won't work if we have multiple matches, i.e. one pattern is subpattern of another in the same group
-                if res:
-                    matched = True
-                    return_ind = max(return_ind, ind)
+            group_matched = False
+            for subpattern in option_list:
+                test_matcher = Matcher(subpattern, self.input_line) # treat each option in the group as separate regex to be matched
+                test_res, t_ind = test_matcher.match_recursive(l_ind=l_ind) # probably won't work if we have multiple matches, i.e. one pattern is subpattern of another in the same group
+                if test_res:
+                    # continue valid subpattern
+                    if curr_pattern.pattern_type == ALTERNATION and not group_matched:
+                        self.backreferrence.append(subpattern) # if matched, append subpattern once
+                        group_matched = True
+                    res, ind = self.match_recursive(p_ind+1, l_ind=t_ind)
+                    if res:
+                        matched = True
+                        return_ind = max(return_ind, ind)
 
         elif curr_pattern.pattern == "$":
             if self.input_line[l_ind] == "\0": 
