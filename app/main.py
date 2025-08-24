@@ -290,7 +290,7 @@ class Matcher:
                 if test_res:
                     # continue valid subpattern
                     if curr_pattern.pattern_type == ALTERNATION and not group_matched:
-                        self.backreferrence.append(subpattern) # if matched, append subpattern once
+                        self.backreferrence.append(parse_all(self.input_line[l_ind:t_ind])) # if matched, append matched string
                         group_matched = True
                     res, ind = self.match_recursive(p_ind+1, l_ind=t_ind)
                     if res:
