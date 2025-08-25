@@ -1,3 +1,4 @@
+# TO-DO: probably bug in + or idk. Look at the last test case
 import sys
 import string
 import functools
@@ -17,18 +18,23 @@ OPTION = 5
 ALTERNATION = 6
 BACKREFERRENCE = 7
 
+BACKREFERRENCE_LIST = dict()
+NUM_GROUPS = 0
+
 class RE_Pattern:
-    def __init__(self, pattern_type, pattern, pattern_list=[], negation=False):
+    def __init__(self, pattern_type, pattern, pattern_list=[], negation=False, group_num=0):
         self.pattern_type = pattern_type
         self.pattern = pattern
         self.pattern_list = pattern_list
         self.negation = negation
 
+        self.group_num = group_num
+
     def __str__(self):
         return f" Type: {self.pattern_type} Pattern: {self.pattern} List:\n{self.pattern_list} Negation: {self.negation}"
 
     def __repr__(self):
-        return f" Type: {self.pattern_type} Pattern: {self.pattern} List:\n{self.pattern_list} Negation: {self.negation}"
+        return f" Type: {self.pattern_type} Pattern: {self.pattern} List:\n{self.pattern_list} Negation: {self.negation}\nInd: {self.group_num}"
 
     def __eq__(self, t):
         return (self.pattern_type == t.pattern_type and
@@ -99,8 +105,8 @@ def split_group(pattern):
 def parse(pattern, ind=0):
     # Parse one RE character
     # For convinience also returns the index where the next pattern should begin
+    global NUM_GROUPS
     curr_ind = ind
-    times = 0
 
     while True:
         # Parse metachar
@@ -116,7 +122,7 @@ def parse(pattern, ind=0):
                 while curr_ind < len(pattern) and pattern[curr_ind].isnumeric():
                     num += pattern[curr_ind]
                     curr_ind += 1
-                return RE_Pattern(BACKREFERRENCE, int(num) - 1), curr_ind # since curr_ind is already in the beginning of the next pattern
+                return RE_Pattern(BACKREFERRENCE, int(num)), curr_ind # since curr_ind is already in the beginning of the next pattern
 
             # some metachar
             return RE_Pattern(METACHAR, "\\" + pattern[curr_ind]), curr_ind + 1
@@ -138,6 +144,8 @@ def parse(pattern, ind=0):
             group = parse_all(subpattern)
             return RE_Pattern(GROUP, None, group, negation), pattern_end + 1
         elif pattern[curr_ind] == "(":
+            NUM_GROUPS += 1
+            curr_num = NUM_GROUPS
             pattern_end = find_end(pattern, curr_ind)
             group = pattern[curr_ind:pattern_end+1] # list of subpattern within the "main" group pattern. ")" should be inclusive
 
@@ -145,7 +153,7 @@ def parse(pattern, ind=0):
 
             # parse_all would get some pattern, maybe, of the form "(something)
             options = list(map(parse_all, options_raw))
-            return RE_Pattern(ALTERNATION, None, options), pattern_end + 1
+            return RE_Pattern(ALTERNATION, None, options, group_num=curr_num), pattern_end + 1
 
         elif pattern[curr_ind] == "^":
             return RE_Pattern(ANCHOR, "^"), curr_ind + 1
@@ -186,7 +194,6 @@ class Matcher:
     def __init__(self, pattern, input_line):
         self.input_line = input_line
         self.pattern = pattern
-        self.backreferrence = []
 
 
     @functools.cache
@@ -273,24 +280,25 @@ class Matcher:
                     matched = True
                     return_ind = max(return_ind, ind)
 
-        elif curr_pattern.pattern_type == ALTERNATION or curr_pattern.pattern_type == BACKREFERRENCE:
+        elif curr_pattern.pattern_type in [ALTERNATION, BACKREFERRENCE]:
             # in case of backreferrence we have a group too, so the logic is pretty similar
             if curr_pattern.pattern_type == ALTERNATION:
                 option_list = curr_pattern.pattern_list
             else:
                 ref_ind = curr_pattern.pattern
-                referrence = self.backreferrence[ref_ind]
+                referrence = BACKREFERRENCE_LIST[ref_ind]
                 option_list = [referrence]
 
-            # somehow subpatterns are lists lol!
             group_matched = False
+            # somehow subpatterns are lists lol!
             for subpattern in option_list:
                 test_matcher = Matcher(subpattern, self.input_line) # treat each option in the group as separate regex to be matched
                 test_res, t_ind = test_matcher.match_recursive(l_ind=l_ind) # probably won't work if we have multiple matches, i.e. one pattern is subpattern of another in the same group
                 if test_res:
                     # continue valid subpattern
                     if curr_pattern.pattern_type == ALTERNATION and not group_matched:
-                        self.backreferrence.append(parse_all(self.input_line[l_ind:t_ind])) # if matched, append matched string
+                        ref_ind = curr_pattern.group_num
+                        BACKREFERRENCE_LIST[ref_ind] = parse_all(self.input_line[l_ind:t_ind]) # if matched, append matched string
                         group_matched = True
                     res, ind = self.match_recursive(p_ind+1, l_ind=t_ind)
                     if res:
@@ -324,6 +332,7 @@ class Matcher:
                     res, end_ind = self.match_recursive(p_ind+2, pos)
                     if res:
                         return (True, end_ind)
+
                 return (False, -1)
 
         return (matched, return_ind)
@@ -333,6 +342,7 @@ def main():
     pattern = sys.argv[2]
     pattern_list = parse_all(pattern)
     input_line = sys.stdin.read()
+
 
     if sys.argv[1] != "-E":
         print("Expected first argument to be '-E'")
