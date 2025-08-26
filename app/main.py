@@ -1,4 +1,3 @@
-# TO-DO: probably bug in + or idk. Look at the last test case
 import sys
 import string
 import functools
@@ -280,30 +279,55 @@ class Matcher:
                     matched = True
                     return_ind = max(return_ind, ind)
 
-        elif curr_pattern.pattern_type in [ALTERNATION, BACKREFERRENCE]:
+        elif curr_pattern.pattern_type == ALTERNATION:
             # in case of backreferrence we have a group too, so the logic is pretty similar
-            if curr_pattern.pattern_type == ALTERNATION:
-                option_list = curr_pattern.pattern_list
-            else:
-                ref_ind = curr_pattern.pattern
-                referrence = BACKREFERRENCE_LIST[ref_ind]
-                option_list = [referrence]
-
             group_matched = False
             # somehow subpatterns are lists lol!
-            for subpattern in option_list:
-                test_matcher = Matcher(subpattern, self.input_line) # treat each option in the group as separate regex to be matched
-                test_res, t_ind = test_matcher.match_recursive(l_ind=l_ind) # probably won't work if we have multiple matches, i.e. one pattern is subpattern of another in the same group
-                if test_res:
-                    # continue valid subpattern
-                    if curr_pattern.pattern_type == ALTERNATION and not group_matched:
+            for subpattern in curr_pattern.pattern_list:
+                curr_l_ind = l_ind
+                matched_inds = []
+
+                # unwrap explicitly to be able to backtrack
+                if subpattern[-1].pattern == "+":
+                    # Try to match as much times as you can
+                    while True:
+                        try_matcher = Matcher(subpattern[:-1], self.input_line)
+                        res, next_ind = try_matcher.match_recursive(l_ind=curr_l_ind)
+                        if res and next_ind > curr_l_ind:
+                            curr_l_ind = next_ind
+                            matched_inds.append(next_ind)
+                        else:
+                            break
+
+                    # If we have matched continue from the furthest index
+                    ref_ind = curr_pattern.group_num
+                    for pos in reversed(matched_inds):
+                        BACKREFERRENCE_LIST[ref_ind] = parse_all(self.input_line[l_ind:pos])
+                        res, end_ind = self.match_recursive(p_ind+1, pos)
+                        if res:
+                            return (True, end_ind)
+
+                else:
+                    test_matcher = Matcher(subpattern,  self.input_line) # treat each option in the group as separate regex to be matched
+                    test_res, t_ind = test_matcher.match_recursive(l_ind=l_ind) 
+                    
+                    if test_res:
+                        # continue valid subpattern
                         ref_ind = curr_pattern.group_num
-                        BACKREFERRENCE_LIST[ref_ind] = parse_all(self.input_line[l_ind:t_ind]) # if matched, append matched string
-                        group_matched = True
-                    res, ind = self.match_recursive(p_ind+1, l_ind=t_ind)
-                    if res:
-                        matched = True
-                        return_ind = max(return_ind, ind)
+                        BACKREFERRENCE_LIST[ref_ind] = parse_all(self.input_line[l_ind:t_ind])
+                        res, ind = self.match_recursive(p_ind+1, l_ind=t_ind)
+                        if res:
+                            matched = True
+                            return_ind = max(return_ind, ind)
+
+        elif curr_pattern.pattern_type == BACKREFERRENCE:
+            ref_ind = curr_pattern.pattern
+            ref = BACKREFERRENCE_LIST[ref_ind]
+            ref_matcher = Matcher(ref + self.pattern[p_ind+1:], self.input_line)
+            res, ind = ref_matcher.match_recursive(l_ind=l_ind)
+            if res:
+                matched = True
+                return_ind = max(return_ind, ind)
 
         elif curr_pattern.pattern == "$":
             if self.input_line[l_ind] == "\0": 
@@ -313,27 +337,27 @@ class Matcher:
         if next_pattern and next_pattern.pattern == "+":
             # up to this point we have tried to match one time (and probably have failed)
             # thus we can try to match depending on option provided
-            if next_pattern.pattern == "+":
-                curr_l_ind = l_ind
-                matched_inds = []
+            curr_l_ind = l_ind
+            matched_inds = []
 
-                # Try to match as much times as you can
-                while True:
-                    try_matcher = Matcher([curr_pattern], self.input_line)
-                    res, next_ind = try_matcher.match_recursive(l_ind=curr_l_ind)
-                    if res and next_ind > curr_l_ind:
-                        curr_l_ind = next_ind
-                        matched_inds.append(next_ind)
-                    else:
-                        break
+            # Try to match as much times as you can
+            while True:
+                try_matcher = Matcher([curr_pattern], self.input_line)
+                res, next_ind = try_matcher.match_recursive(l_ind=curr_l_ind)
+                if res and next_ind > curr_l_ind:
+                    curr_l_ind = next_ind
+                    matched_inds.append(next_ind)
+                else:
+                    break
 
-                # If we have matches continue from the furthest index
-                for pos in reversed(matched_inds):
-                    res, end_ind = self.match_recursive(p_ind+2, pos)
-                    if res:
-                        return (True, end_ind)
 
-                return (False, -1)
+            # If we have matched continue from the furthest index
+            for pos in reversed(matched_inds):
+                res, end_ind = self.match_recursive(p_ind+2, pos)
+                if res:
+                    return (True, end_ind)
+
+            return (False, -1)
 
         return (matched, return_ind)
 
@@ -342,7 +366,6 @@ def main():
     pattern = sys.argv[2]
     pattern_list = parse_all(pattern)
     input_line = sys.stdin.read()
-
 
     if sys.argv[1] != "-E":
         print("Expected first argument to be '-E'")
