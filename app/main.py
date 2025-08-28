@@ -1,8 +1,8 @@
 import sys
+import os
+from pathlib import Path
 import string
 import functools
-# import pyparsing - available if you need it!
-# import lark - available if you need it!
 
 # ======================== preprocessing functions ==========================================
 
@@ -361,6 +361,57 @@ class Matcher:
 
         return (matched, return_ind)
 
+# ==================================== functions to build directory tree ============================
+
+class Dir:
+    """ Directory tree node"""
+    def __init__(self, dirname):
+        self.dirname = dirname
+        self.files = []
+        self.subdirs = []
+
+
+    def build_dir(self):
+        """ Recursively builds directory tree"""
+        curr_dir = os.getcwd()
+
+        new_path = os.path.join(curr_dir, self.dirname)
+        os.chdir(new_path)
+        
+        p = Path(".")
+        self.files = [str(f) for f in p.iterdir() if f.is_file()]
+        subdirs  = [d for d in p.iterdir() if d.is_dir()]
+
+        for subdir_name in subdirs:
+            subdir = Dir(subdir_name)
+            subdir.build_dir()
+            self.subdirs.append(subdir)
+
+        os.chdir("..") # backtrack
+
+
+    def print_tree(self, tabs=0):
+        print(tabs * " ", self.dirname)
+
+        for subdir in self.subdirs:
+            subdir.print_tree(tabs+1)
+
+
+    def name_files(self):
+        """ Get path names of each leaf (file) within the tree"""
+        files = self.files.copy()
+
+        for subdir in self.subdirs:
+            files.extend(subdir.name_files())
+
+        named_files = [str(self.dirname) + "/" + str(file_name) for file_name in files]
+
+        return named_files
+
+
+
+# ===================================== matching function for lines/files ==========================
+
 
 def match_one(pattern_list, input_line):
     """
@@ -425,20 +476,34 @@ def main():
     pattern = sys.argv[2]
     pattern_list = parse_all(pattern)
 
-    if sys.argv[1] != "-E":
-        print("Expected first argument to be '-E'")
+    if sys.argv[1] not in ["-r", "-E"]:
+        print("Expected first argument to be '-E' or '-r'")
         exit(1)
 
-    # if no input line, try read file
-    if len(sys.argv) > 3:
-        res = False
-        multifile = (len(sys.argv) > 4)
-        file_name_list = sys.argv[3:]
-        for file_name in file_name_list:
-            res |= match_file(pattern_list, file_name, multifile)
-    else:
+    # simple case with inputing through echo
+    if len(sys.argv) == 3:
         input_line = sys.stdin.read()
         res = match_one(pattern_list, input_line)
+    else:
+        res = False
+        # recursively traverse the directory and its subdirectories
+        if sys.argv[1] == "-r":
+            dir_name = sys.argv[4].rstrip("/")
+
+            pattern = sys.argv[3]
+            pattern_list = parse_all(pattern)
+
+            multifile = True
+            working_dir = Dir(dir_name) # create dir class
+            working_dir.build_dir() # build the tree
+            file_name_list = working_dir.name_files() # get all files' names
+        # just a multifile query
+        else:
+            multifile = (len(sys.argv) > 4)
+            file_name_list = sys.argv[3:]
+
+        for file_name in file_name_list:
+            res |= match_file(pattern_list, file_name, multifile)
 
     if res:
         exit(0)
