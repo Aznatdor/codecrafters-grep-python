@@ -383,31 +383,31 @@ def match_one(pattern_list, input_line):
         matcher = Matcher(pattern_list[1:], input_line)
         res, ind = matcher.match_recursive()
         if res:
-            print(input_line, file=sys.stdout)
             return True
     else:
         matcher = Matcher(pattern_list, input_line)
         for start_pos in range(input_len):
             res, ind = matcher.match_recursive(l_ind=start_pos)
             if res:
-                print(input_line, file=sys.stdout)
                 return True
 
     return False
 
 
-def match_file(pattern, file_name):
+def match_file(pattern, file_name, multifile=False):
     """
         Function to match pattern with lines in file
 
         args:
             pattern: List[RE_Pattern] pattern to match
             file_name: str - to file name
+            multifile: bool - if True, prints file name
 
         returns:
             matched: bool flag whether pattern has been matched with at least one line
     """
     matched = False
+    pref = (file_name + ":") if multifile else ""
 
     with open(file_name) as file:
         for line in file.readlines():
@@ -415,6 +415,7 @@ def match_file(pattern, file_name):
             res = match_one(pattern, line)
 
             if res:
+                print(pref + line, file=sys.stdout)
                 matched = True
 
     return matched
@@ -423,17 +424,20 @@ def match_file(pattern, file_name):
 def main():
     pattern = sys.argv[2]
     pattern_list = parse_all(pattern)
-    input_line = sys.stdin.read()
 
     if sys.argv[1] != "-E":
         print("Expected first argument to be '-E'")
         exit(1)
 
     # if no input line, try read file
-    if not input_line:
-        file_name = sys.argv[3]
-        res = match_file(pattern_list, file_name)
+    if len(sys.argv) > 3:
+        res = False
+        multifile = (len(sys.argv) > 4)
+        file_name_list = sys.argv[3:]
+        for file_name in file_name_list:
+            res |= match_file(pattern_list, file_name, multifile)
     else:
+        input_line = sys.stdin.read()
         res = match_one(pattern_list, input_line)
 
     if res:
