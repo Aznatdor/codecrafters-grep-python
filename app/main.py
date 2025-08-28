@@ -411,6 +411,7 @@ def match_file(pattern, file_name):
 
     with open(file_name) as file:
         for line in file.readlines():
+            line = line.rstrip("\n")
             res = match_one(pattern, line)
 
             if res:
